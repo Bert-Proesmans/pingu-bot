@@ -6,6 +6,7 @@ import click
 import util
 from bot import PinguBot
 
+
 @contextlib.contextmanager
 def setup_logging():
     """Method available in `with` syntax to construct and destruct logging infrastructure."""
@@ -14,11 +15,14 @@ def setup_logging():
         # Print all errors and higher, for all modules, to console.
         logging.basicConfig(level=logging.ERROR)
 
+        # Make sure to print ALL data from our bot class
+        logging.getLogger('bot').setLevel(logging.DEBUG)
+
         # Make sure to print ALL data from cogs
         logging.getLogger('cogs').setLevel(logging.DEBUG)
 
         # Send discord logging to file.
-        logging.getLogger('discord').setLevel(logging.DEBUG)
+        logging.getLogger('discord').setLevel(logging.INFO)
         handler = util.ExistsFileHandler(filename='logs/discord.log', mode='w')
         handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
         logging.getLogger().addHandler(handler)

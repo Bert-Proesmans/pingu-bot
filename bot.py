@@ -2,7 +2,9 @@ import logging
 import sys
 import traceback
 import datetime
+import asyncio
 
+import discord
 from discord.ext import commands
 
 _description = """
@@ -28,7 +30,7 @@ def _prefix_callable(bot, msg):
         # allowed_prefix.extend(bot.prefixes.get(msg.guild.id, ['?', '!']))
         pass
     # DBG
-    log.debug(allowed_prefix)
+    # log.debug(allowed_prefix)
     return allowed_prefix
 
 
@@ -65,8 +67,12 @@ class PinguBot(commands.Bot):
     async def on_ready(self):
         if not hasattr(self, 'uptime'):
             self.uptime = datetime.datetime.utcnow()
+        # Update bot username and avatar
+        if self.user.name != _bot_nickname:
+            await self.user.edit(username=_bot_nickname)
+            # TODO Maybe update the avatar as well?
+
         log.info(f'Ready: {self.user} (ID: {self.user.id})')
-        # TODO: change nickname of bot
 
     async def on_resumed(self):
         log.info('resumed...')
@@ -78,3 +84,20 @@ class PinguBot(commands.Bot):
         log.info('Bot close requested')
         super().close()
 
+    async def respond_editable(self, message: discord.Message, response: str, previous_message=None):
+        if previous_message is None:
+            previous_message = await message.channel.send(response)
+        else:
+            await previous_message.edit(response)
+
+        await self._check_edit(message, previous_message.content)
+
+    async def _check_edit(self, message: discord.Message, sent_message: str):
+        """NON ROBUST scheme for checking edited messages"""
+        original_content = message.content
+        for _ in range(30):
+            if message.content != original_content:
+                # TODO Introduce seperate method which also incorporates the previous message contents
+                await self.on_message(message.content)
+                return
+            await asyncio.sleep(1)
