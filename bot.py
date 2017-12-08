@@ -7,17 +7,7 @@ import asyncio
 import discord
 from discord.ext import commands
 
-_description = """
-NOOT NOOT! Development Pingu bot!
-"""
-
-_bot_nickname = "b-dev Pingu Bot"
-
 log = logging.getLogger(__name__)
-
-whitelisted_extensions = (
-    'cogs.command_test',
-)
 
 
 def _prefix_callable(bot, msg):
@@ -38,11 +28,13 @@ class PinguBot(commands.Bot):
     """Wrapper class to support the Pingu Bot"""
 
     def __init__(self):
-        super().__init__(command_prefix=_prefix_callable, description=_description, pm_help=True)
+        super().__init__(command_prefix=_prefix_callable,
+                         description=self.config.BOT_DESCRIPTION,
+                         pm_help=True)
         self._setup_extensions()
 
     def _setup_extensions(self):
-        for extension in whitelisted_extensions:
+        for extension in self.config.EXTENSIONS_WHITELIST:
             try:
                 self.load_extension(extension)
             except Exception as e:
@@ -68,8 +60,8 @@ class PinguBot(commands.Bot):
         if not hasattr(self, 'uptime'):
             self.uptime = datetime.datetime.utcnow()
         # Update bot username and avatar
-        if self.user.name != _bot_nickname:
-            await self.user.edit(username=_bot_nickname)
+        if self.user.name != self.config.BOT_NICKNAME:
+            await self.user.edit(username=self.config.BOT_NICKNAME)
             # TODO Maybe update the avatar as well?
 
         log.info(f'Ready: {self.user} (ID: {self.user.id})')
@@ -92,7 +84,7 @@ class PinguBot(commands.Bot):
 
         await self._check_edit(message, previous_message.content)
 
-    async def _check_edit(self, message: discord.Message, sent_message: str):
+    async def _check_edit(self, message: discord.Message, sent_response: discord.Message):
         """NON ROBUST scheme for checking edited messages"""
         original_content = message.content
         for _ in range(30):
