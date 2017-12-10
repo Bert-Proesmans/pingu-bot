@@ -22,7 +22,7 @@ def setup_logging():
         logging.getLogger('util').setLevel(logging.DEBUG)
 
         # Send discord logging to file.
-        logging.getLogger('discord').setLevel(logging.INFO)
+        logging.getLogger('discord').setLevel(logging.DEBUG)
         handler = util.ExistsFileHandler(filename='logs/discord.log', mode='w')
         handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s: %(message)s'))
         logging.getLogger().addHandler(handler)

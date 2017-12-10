@@ -16,7 +16,7 @@ class TestCommands:
     def _setup(self):
         pass
 
-    @commands.command(pass_context=True, no_pm=False)
+    @commands.command()
     @commands.is_owner()
     async def echo(self, ctx, *args: str):
         """Echo received messages."""
@@ -26,7 +26,7 @@ class TestCommands:
             await ctx.send(result_string)
             log.debug(f'Echoed {result_string}')
 
-    @commands.command(pass_context=True, no_pm=True)
+    @commands.command()
     @commands.is_owner()
     async def shutdown(self, ctx):
         """The bot will be logged out and the session will end."""

@@ -23,6 +23,11 @@ def _prefix_callable(bot, msg):
     return allowed_prefix
 
 
+def _guild_prefix_key(guild_id: int):
+    """Constructs the key for locating all allowed prefixes for the specified guild."""
+    return 'prefix_' + str(guild_id)
+
+
 class PinguBot(commands.Bot):
     """Wrapper class to support the Pingu Bot"""
 
@@ -38,6 +43,7 @@ class PinguBot(commands.Bot):
         for extension in self.config.EXTENSIONS_WHITELIST:
             try:
                 self.load_extension(extension)
+                log.debug(f'Extension {extension} loaded!')
             except Exception as e:
                 log.exception(f'Failed to load extension `{extension}`')
                 traceback.print_exc()
@@ -59,7 +65,13 @@ class PinguBot(commands.Bot):
             print(f'In {ctx.command.qualified_name}:', file=sys.stderr)
             traceback.print_tb(error.original.__traceback__)
             log.exception(f'{error.original.__class__.__name__}: {error.original}')
+        elif isinstance(error, commands.MissingRequiredArgument):
+            required_param = error.param
+            await ctx.author.send(f'Hi there! You did not add the required argument `{required_param}`..')
+        elif isinstance(error, commands.CommandNotFound):
+            pass
         # Extend functionality here for other kinds of issues
+        log.debug(str(error))
 
     async def on_ready(self):
         if not hasattr(self, 'uptime'):
@@ -86,13 +98,26 @@ class PinguBot(commands.Bot):
         super().close()
 
     def get_prefixes_for_guild(self, guild_id: int):
-        prefix_key = 'prefix_' + str(guild_id)
+        """Retrieves all saved prefixes for the specified guild."""
+        prefix_key = _guild_prefix_key(guild_id)
         try:
             prefixes = self.global_cache[prefix_key]
         except KeyError:
-            prefixes = []
+            prefixes = set()
             self.global_cache[prefix_key] = prefixes
         return prefixes
+
+    def add_prefix_for_guild(self, guild_id: int, prefix: str):
+        """Adds the specified prefix to the saved list of prefixes for the specified guild."""
+        prefix_key = _guild_prefix_key(guild_id)
+        prefixes = set()
+        try:
+            prefixes = self.global_cache[prefix_key]
+        except KeyError:
+            pass
+        # Update set and store it for the desired key
+        prefixes.add(prefix)
+        self.global_cache[prefix_key] = prefixes
 
     async def respond_editable(self, message: discord.Message, response: str, previous_message=None):
         if previous_message is None:
