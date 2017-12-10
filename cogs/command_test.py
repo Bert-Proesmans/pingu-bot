@@ -33,6 +33,7 @@ class TestCommands:
         await ctx.send('Shutting down bot')
         await self.bot.logout()
         # Logout is implicit through interrupt
+        # Do NOT explicitly stop the event loop!
         raise KeyboardInterrupt('Kill command received!')
 
 

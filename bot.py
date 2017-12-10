@@ -17,10 +17,9 @@ def _prefix_callable(bot, msg):
         allowed_prefix.append('!')
         allowed_prefix.append('?')
     else:
-        # allowed_prefix.extend(bot.prefixes.get(msg.guild.id, ['?', '!']))
-        pass
+        allowed_prefix.extend(bot.get_prefixes_for_guild(msg.guild.id))
     # DBG
-    # log.debug(allowed_prefix)
+    log.debug(allowed_prefix)
     return allowed_prefix
 
 
@@ -85,6 +84,15 @@ class PinguBot(commands.Bot):
     async def close(self):
         log.info('Bot close requested')
         super().close()
+
+    def get_prefixes_for_guild(self, guild_id: int):
+        prefix_key = 'prefix_' + str(guild_id)
+        try:
+            prefixes = self.global_cache[prefix_key]
+        except KeyError:
+            prefixes = []
+            self.global_cache[prefix_key] = prefixes
+        return prefixes
 
     async def respond_editable(self, message: discord.Message, response: str, previous_message=None):
         if previous_message is None:

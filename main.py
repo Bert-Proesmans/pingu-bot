@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import contextlib
 
@@ -17,9 +18,8 @@ def setup_logging():
 
         # Make sure to print ALL data from our bot class
         logging.getLogger('bot').setLevel(logging.DEBUG)
-
-        # Make sure to print ALL data from cogs
         logging.getLogger('cogs').setLevel(logging.DEBUG)
+        logging.getLogger('util').setLevel(logging.DEBUG)
 
         # Send discord logging to file.
         logging.getLogger('discord').setLevel(logging.INFO)
@@ -53,6 +53,8 @@ def setup_cache(cache_path):
 @click.pass_context
 def main(ctx, tmp_path):
     if ctx.invoked_subcommand is None:
+        # Attaches the event loop to this thread
+        event_loop = asyncio.get_event_loop()
         with setup_logging():
             with setup_cache(tmp_path) as cache_manager:
                 run_bot(cache_manager)
