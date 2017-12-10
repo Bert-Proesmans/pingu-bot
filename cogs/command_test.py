@@ -17,6 +17,7 @@ class TestCommands:
         pass
 
     @commands.command(pass_context=True, no_pm=False)
+    @commands.is_owner()
     async def echo(self, ctx, *args: str):
         """Echo received messages."""
         async with ctx.channel.typing():
@@ -26,6 +27,7 @@ class TestCommands:
             log.debug(f'Echoed {result_string}')
 
     @commands.command(pass_context=True, no_pm=True)
+    @commands.is_owner()
     async def shutdown(self, ctx):
         """The bot will be logged out and the session will end."""
         await ctx.send('Shutting down bot')
