@@ -11,6 +11,10 @@ class TestCommands:
 
     def __init__(self, bot):
         self.bot = bot
+        self._setup()
+
+    def _setup(self):
+        pass
 
     @commands.command(pass_context=True, no_pm=False)
     async def echo(self, ctx, *args: str):

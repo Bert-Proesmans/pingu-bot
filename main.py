@@ -37,17 +37,30 @@ def setup_logging():
             root_log.removeHandler(hldr)
 
 
+@contextlib.contextmanager
+def setup_cache(cache_path):
+    """Method available in `with` syntax to setup/tear down caching infrastructure."""
+    cache_manager = None
+    try:
+        cache_manager = util.CacheManager(cache_path)
+        yield cache_manager
+    finally:
+        cache_manager.cleanup()
+
+
 @click.group(invoke_without_command=True)
+@click.option('--tmp_path', default=None, help='Location of cache files.')
 @click.pass_context
-def main(ctx):
+def main(ctx, tmp_path):
     if ctx.invoked_subcommand is None:
         with setup_logging():
-            run_bot()
+            with setup_cache(tmp_path) as cache_manager:
+                run_bot(cache_manager)
 
 
-def run_bot():
+def run_bot(cache_manager):
     # Setup the bot, it will automatically use the discord logger.
-    bot = PinguBot()
+    bot = PinguBot(cache_manager)
     # Start the bot
     bot.run()
 

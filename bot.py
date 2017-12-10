@@ -27,10 +27,12 @@ def _prefix_callable(bot, msg):
 class PinguBot(commands.Bot):
     """Wrapper class to support the Pingu Bot"""
 
-    def __init__(self):
+    def __init__(self, cache_manager):
         super().__init__(command_prefix=_prefix_callable,
                          description=self.config.BOT_DESCRIPTION,
                          pm_help=True)
+        self.global_cache = None
+        self._cache_manager = cache_manager
         self._setup_extensions()
 
     def _setup_extensions(self):
@@ -44,6 +46,10 @@ class PinguBot(commands.Bot):
     @property
     def config(self):
         return __import__('config')
+
+    @property
+    def cache_manager(self):
+        return self._cache_manager
 
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.NoPrivateMessage):
@@ -70,6 +76,10 @@ class PinguBot(commands.Bot):
         log.info('resumed...')
 
     def run(self):
+        # Remove a reference to the cache manager, because COGS should operate on cache arena's.
+        self.global_cache = self._cache_manager.global_cache
+        del self._cache_manager
+        # Connect and run the event-loop of our bot
         super().run(self.config.TOKEN, reconnect=True)
 
     async def close(self):
