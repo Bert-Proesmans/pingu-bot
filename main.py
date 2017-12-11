@@ -3,6 +3,7 @@ import logging
 import contextlib
 
 import click
+import discord
 
 import util
 from bot import PinguBot
@@ -55,14 +56,20 @@ def main(ctx, tmp_path):
     if ctx.invoked_subcommand is None:
         # Attaches the event loop to this thread
         event_loop = asyncio.get_event_loop()
-        with setup_logging():
-            with setup_cache(tmp_path) as cache_manager:
-                run_bot(cache_manager)
+        with setup_logging(), setup_cache(tmp_path) as cache_manager:
+            run_bot(cache_manager)
 
 
 def run_bot(cache_manager):
     # Setup the bot, it will automatically use the discord logger.
     bot = PinguBot(cache_manager)
+
+    # Make sure everything is setup to join/send data to voice channels.
+    if bot.config.ENABLE_VOICE:
+        logging.getLogger('bot').info('Loading OPUS')
+        if not discord.opus.is_loaded():
+            discord.opus.load_opus('opus')
+
     # Start the bot
     bot.run()
 

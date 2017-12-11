@@ -1,5 +1,4 @@
 import logging
-import asyncio
 
 from discord.ext import commands
 
@@ -20,15 +19,11 @@ class Administration:
     async def _add(self, ctx):
         if not ctx.subcommand_passed:
             await ctx.send(f'You have to pass a subcommand. Type \'{ctx.prefix} help\' for more info.')
-        else:
-            await ctx.send(f'[DBG] {ctx.subcommand_passed}')
 
     @commands.group(name='remove')
     async def _remove(self, ctx):
         if not ctx.subcommand_passed:
             await ctx.send(f'You have to pass a subcommand. Type \'{ctx.prefix} help\' for more info.')
-        else:
-            await ctx.send(f'[DBG] {ctx.subcommand_passed}')
 
     @_add.command(name='prefix')
     @commands.cooldown(2, 5.0, commands.BucketType.guild)
