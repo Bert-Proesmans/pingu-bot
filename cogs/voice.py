@@ -1,10 +1,19 @@
+import sys
 import logging
+import importlib
 
 import discord
 from discord.ext import commands
 from unidecode import unidecode
 
+from .players import PlayerBase
+from .players.spotify import SpotControl as Spotify
+
 log = logging.getLogger(__name__)
+
+PLAYERS_WHITELIST = {
+    'spotify': 'cogs.players.spotify',
+}
 
 
 class VoiceState:
@@ -12,32 +21,26 @@ class VoiceState:
 
     def __init__(self, bot):
         self.bot = bot
-        self.voice_client = None
+        self._voice_client = None
+        self._player = None
 
     @property
     def current(self):
         """Currently playing."""
         return None
 
-    def skip(self, amount: int):
-        """Skip `amount` of songs."""
-        pass
+    @property
+    def voice_client(self):
+        return self._voice_client
 
-    def previous(self, amount: int):
-        """Go back `amount` of songs."""
-        pass
+    def set_player(self, player):
+        if not isinstance(player, PlayerBase):
+            raise Exception
 
-    def play(self):
-        """Send music to channel."""
-        pass
+        if self._player is not None:
+            self._player.stop()
 
-    def pause(self):
-        """Pause sending music to channel."""
-        pass
-
-    def stop(self):
-        """Cancel playing music and free allocated resources."""
-        pass
+        self._player = player
 
 
 class Voice:
@@ -46,6 +49,19 @@ class Voice:
     def __init__(self, bot):
         self.bot = bot
         self.voice_states = {}
+        self._players = {}
+
+    def _setup_players(self):
+        for player in set(PLAYERS_WHITELIST.keys()):
+            lib_path = PLAYERS_WHITELIST[player]
+            lib = importlib.import_module(lib_path)
+            if not hasattr(lib, 'setup'):
+                del lib
+                del sys.modules[player]
+                log.error(f'{player} has NO setup method!')
+            construction_delegate = lib.setup()
+            self._players[player] = construction_delegate
+            # TODO This delegate MUST be checked for return type!
 
     def _get_voice_state(self, guild: discord.Guild):
         state = self.voice_states.get(guild.id)
@@ -56,33 +72,36 @@ class Voice:
         return state
 
     async def _create_voice_client(self, channel: discord.VoiceChannel):
-        if channel is None: raise discord.InvalidArgument('voice channel')
+        if channel is None: raise commands.MissingRequiredArgument('voice channel')
 
         client = await channel.connect()
         state = self._get_voice_state(channel.guild)
         state.voice_client = client
 
     async def _remove_voice_client(self, guild: discord.Guild):
-        if guild is None: raise discord.InvalidArgument('guild')
+        if guild is None: raise commands.MissingRequiredArgument('guild')
 
         state = self.voice_states.pop(guild.id, None)
         if state is None:
             return
 
-        if state.current:
-            state.stop()
-
         try:
+            if state.current:
+                state.stop()
             if state.voice_client:
                 await state.voice_client.disconnect()
         except:
             pass
 
     async def _move_voice_client(self, channel: discord.VoiceChannel):
-        if channel is None: raise discord.InvalidArgument('voice channel')
+        if channel is None: raise commands.MissingRequiredArgument('voice channel')
         guild = channel.guild
         state = self._get_voice_state(guild)
         await state.voice_client.move_to(channel)
+
+    async def _attach_player(self, guild: discord.Guild, player_str: str):
+        if guild is None: raise commands.MissingRequiredArgument('guild')
+        if player_str is None: raise commands.MissingRequiredArgument('player')
 
     @commands.command()
     @commands.guild_only()
@@ -132,6 +151,15 @@ class Voice:
             await ctx.send('Not playing anything.')
         else:
             await ctx.send(f'Currently playing: {state.current}')
+
+    @commands.command()
+    @commands.guild_only()
+    async def attach(self, ctx, player: str):
+        """Attaches the specified player to the current voice state"""
+        try:
+            await self._attach_player(ctx.guild, player)
+        except commands.MissingRequiredArgument as e:
+            ctx.send(f'Your command lacks the following argument: {e.param}')
 
 
 def setup(bot):
