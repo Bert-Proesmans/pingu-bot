@@ -3,11 +3,16 @@ import sys
 import traceback
 import datetime
 import asyncio
+from types import ModuleType
 
 import discord
 from discord.ext import commands
 
 log = logging.getLogger(__name__)
+
+
+class MissingSubCommandError(commands.UserInputError):
+    pass
 
 
 def _prefix_callable(bot, msg):
@@ -40,13 +45,25 @@ class PinguBot(commands.Bot):
         self._setup_extensions()
 
     def _setup_extensions(self):
+        log.info('Loading extensions..')
         for extension in self.config.EXTENSIONS_WHITELIST:
             try:
+                log.debug(f'Loading extension {extension}..')
                 self.load_extension(extension)
-                log.debug(f'Extension {extension} loaded!')
-            except Exception as e:
+            except discord.ClientException:
+                log.exception(f'Module `{extension}` does not expose the required setup method!')
+            except ImportError:
                 log.exception(f'Failed to load extension `{extension}`')
                 traceback.print_exc()
+
+    def get_loaded_cogs_for_module(self, module):
+        if not isinstance(module, ModuleType): raise ValueError('module')
+        result_cogs = []
+        module_name = module.__name__
+        for cogname, cog in self.cogs.copy().items():
+            if commands.bot._is_submodule(module_name, cog.__module__):
+                result_cogs.append(cog)
+        return result_cogs
 
     @property
     def config(self):
@@ -70,6 +87,9 @@ class PinguBot(commands.Bot):
             await ctx.author.send(f'Hi there! You did not add the required argument `{required_param}`..')
         elif isinstance(error, commands.CommandNotFound):
             pass
+        elif isinstance(error, MissingSubCommandError):
+            await ctx.author.send('Hi there! You did not provided a subcommand..')
+
         # Extend functionality here for other kinds of issues
         log.debug(str(error))
 

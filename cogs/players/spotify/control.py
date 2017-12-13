@@ -2,24 +2,25 @@ import logging
 
 from discord.ext import commands
 
+from bot import MissingSubCommandError
+from cogs.players.player_base import ControlBase
+
 log = logging.getLogger(__name__)
 
-class SpotControl:
+
+class SpotControl(ControlBase):
     def __init__(self):
         self._spawns = {}
         self._credentials = {}
-        
 
-    def _build_spawn(self):
-        """Build a state object to control the spun up librespot instance."""
+    def spawn_source(self, *args, **kwargs):
         pass
 
     @commands.group(name='spotify')
     @commands.guild_only()
     async def _spotify(self, ctx):
         if not ctx.subcommand_passed:
-            # TODO Just raise 'missing subcommand' error
-            await ctx.send(t'You have to pass a subcommand.')
+            raise MissingSubCommandError()
 
     @_spotify.command(name='setup')
     @commands.guild_only()
@@ -32,3 +33,7 @@ def setup(bot):
     spot_instance = SpotControl()
     bot.add_cog(spot_instance)
 
+
+def teardown():
+    """Optional: Can be used to clean up after usage."""
+    pass

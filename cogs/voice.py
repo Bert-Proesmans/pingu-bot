@@ -1,18 +1,19 @@
 import sys
 import logging
 import importlib
+from types import ModuleType
 
 import discord
 from discord.ext import commands
 from unidecode import unidecode
 
-from .players import PlayerBase
+from .players import PlayerBase, UnknownPlayerError, ControlBase
 
 log = logging.getLogger(__name__)
 
-PLAYERS_WHITELIST = {
-    'spotify': 'cogs.players.spotify.control',
-}
+
+class NoVoiceStateError(discord.ClientException):
+    pass
 
 
 class VoiceState:
@@ -25,12 +26,41 @@ class VoiceState:
 
     @property
     def current(self):
-        """Currently playing. This method should return None is no music is being played."""
-        return None
+        """Currently playing. This method should always return a string!"""
+        return str(self._player) or 'Nothing to play'
 
     @property
     def voice_client(self):
         return self._voice_client
+
+    async def create_voice_client(self, channel: discord.VoiceChannel):
+        if channel is None: raise commands.MissingRequiredArgument('voice channel')
+
+        if self._voice_client:
+            await self.move_voice_client(channel)
+            return
+
+        client = await channel.connect()
+        self._voice_client = client
+
+    async def remove_voice_client(self):
+        if not self._voice_client:
+            return
+
+        if self._player:
+            self._player.stop()
+
+        try:
+            await self._voice_client.disconnect()
+        except:
+            pass
+        finally:
+            self._voice_client = None
+
+    async def move_voice_client(self, channel: discord.VoiceChannel):
+        if channel is None: raise commands.MissingRequiredArgument('voice channel')
+        if self._voice_client:
+            await self._voice_client.move_to(channel)
 
     def set_player(self, player):
         if not isinstance(player, PlayerBase):
@@ -47,68 +77,38 @@ class Voice:
 
     def __init__(self, bot):
         self.bot = bot
-        self.voice_states = {}
+        self._voice_states = {}
         self._players = {}
 
-        self._setup_players()
-
-    def _setup_players(self):
-        # TODO Use the bot interface for adding extensions
-        # Find out a way to retrieve the built control object.
-        for player in set(PLAYERS_WHITELIST.keys()):
-            lib_path = PLAYERS_WHITELIST[player]
-            lib = importlib.import_module(lib_path)
-            if not hasattr(lib, 'setup'):
-                del lib
-                del sys.modules[player]
-                log.error(f'{player} has NO setup method!')
-            construction_delegate = lib.setup()
-            self._players[player] = construction_delegate
-            # TODO This delegate MUST be checked for return type!
+    def register_player(self, name: str, player_module):
+        if not isinstance(player_module, ModuleType): raise ValueError('player_module')
+        cogs = self.bot.get_loaded_cogs_for_module(player_module)
+        if not len(cogs) == 1: raise ValueError('Need class spawning AudioSource objects!')
+        control_instance = cogs[0]
+        if not isinstance(control_instance, ControlBase): raise ValueError('Not a control object')
+        # Store the spawn_source object as callback for later use
+        self._players[name] = control_instance.spawn_source
 
     def _get_voice_state(self, guild: discord.Guild):
-        state = self.voice_states.get(guild.id)
+        state = self._voice_states.get(guild.id)
         if state is None:
-            state = VoiceState(self.bot)
-            self.voice_states[guild.id] = state
+            raise NoVoiceStateError()
 
         return state
 
-    async def _create_voice_client(self, channel: discord.VoiceChannel):
-        if channel is None: raise commands.MissingRequiredArgument('voice channel')
-
-        client = await channel.connect()
-        state = self._get_voice_state(channel.guild)
-        state.voice_client = client
-
-    async def _remove_voice_client(self, guild: discord.Guild):
-        if guild is None: raise commands.MissingRequiredArgument('guild')
-
-        state = self.voice_states.pop(guild.id, None)
+    def _build_voice_state(self, guild: discord.Guild):
+        state = self._voice_states.get(guild.id)
         if state is None:
-            return
-
-        try:
-            if state.current:
-                state.stop()
-            if state.voice_client:
-                await state.voice_client.disconnect()
-        except:
-            pass
-
-    async def _move_voice_client(self, channel: discord.VoiceChannel):
-        if channel is None: raise commands.MissingRequiredArgument('voice channel')
-        guild = channel.guild
-        state = self._get_voice_state(guild)
-        await state.voice_client.move_to(channel)
+            state = VoiceState(self)
+            self._voice_states[guild.id] = state
+        return state
 
     async def _attach_player(self, guild: discord.Guild, player_str: str):
         if guild is None: raise commands.MissingRequiredArgument('guild')
         if player_str is None: raise commands.MissingRequiredArgument('player')
 
         if player_str not in self._players:
-            # TODO Change to unknown player error
-            raise Exception('Player unknown')
+            raise UnknownPlayerError()
 
         player_builder = self._players[player_str]
         player = player_builder()
@@ -127,7 +127,8 @@ class Voice:
             filter(lambda x: unidecode(x.name).strip().startswith(channel), all_channels),
             None)
         try:
-            await self._create_voice_client(target_channel)
+            state = self._build_voice_state(ctx.guild)
+            await state.create_voice_client(target_channel)
         except discord.InvalidArgument:
             await ctx.send('This is not a voice channel...')
         except discord.ClientException:
@@ -144,28 +145,28 @@ class Voice:
 
         if summoned_channel is None:
             await ctx.send('You are not in a voice channel.')
+            return
 
-        state = self._get_voice_state(summoned_channel.guild)
-        if state.voice_client is None:
-            state.voice_client = await summoned_channel.connect()
-        else:
-            await self._move_voice_client(summoned_channel)
+        state = self._build_voice_state(summoned_channel.guild)
+        await state.create_voice_client(summoned_channel)
 
     @commands.command()
     @commands.guild_only()
     async def stop(self, ctx):
         """Stops playing music and the bot will leave the voice channel."""
-        await self._remove_voice_client(ctx.guild)
+        state = self._voice_states.pop(ctx.guild.id, None)
+        if state:
+            await state.remove_voice_client()
 
     @commands.command()
     @commands.guild_only()
     async def playing(self, ctx):
         """Shows info about the currently played song."""
-        state = self._get_voice_state(ctx.guild)
-        if state.current is None:
-            await ctx.send('Not playing anything.')
-        else:
+        try:
+            state = self._get_voice_state(ctx.guild)
             await ctx.send(f'Currently playing: {state.current}')
+        except NoVoiceStateError:
+            await ctx.send('I\'m not in a voice channel currently')
 
     @commands.command()
     @commands.guild_only()
@@ -173,10 +174,25 @@ class Voice:
         """Attaches the specified player to the current voice state"""
         try:
             await self._attach_player(ctx.guild, player)
-        except commands.MissingRequiredArgument as e:
-            ctx.send(f'Your command lacks the following argument: {e.param}')
+        except UnknownPlayerError:
+            await ctx.send(f'The player `{player}` doesn\'t exist!')
 
 
 def setup(bot):
     """Setup handlers in this module for the provided bot."""
-    bot.add_cog(Voice(bot))
+    voice_ext = Voice(bot)
+    bot.add_cog(voice_ext)
+
+    log.info('Loading whitelisted players..')
+    players_whitelist = bot.config.PLAYERS_WHITELIST
+    for player in set(players_whitelist.keys()):
+        player_module = players_whitelist[player]
+        try:
+            bot.load_extension(player_module)
+            try:
+                player_lib = bot.extensions[player_module]
+                voice_ext.register_player(player, player_lib)
+            except:
+                bot.unload_extension(player_module)
+        except (discord.ClientException, ImportError):
+            log.exception(f'Failed to load player `{player}`')

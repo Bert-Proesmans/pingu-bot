@@ -1,7 +1,19 @@
+from abc import ABC
 
-# TODO Implement UnknownPlayerError
+import discord
 
-class PlayerBase:
+
+class UnknownPlayerError(discord.ClientException):
+    pass
+
+
+class ControlBase(ABC):
+    def spawn_source(self, *args, **kwargs):
+        """Spawn a new audiosource object, which can be played."""
+        raise NotImplementedError
+
+
+class PlayerBase(ABC, discord.AudioSource):
     def skip(self, amount: int):
         """Skip `amount` of songs."""
         raise NotImplementedError
