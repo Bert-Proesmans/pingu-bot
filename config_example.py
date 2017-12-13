@@ -7,6 +7,10 @@ NOOT NOOT! Development Pingu bot!
 
 ENABLE_VOICE = True
 
+PLAYERS_WHITELIST = {
+    'spotify': 'cogs.players.spotify.control',
+}
+
 EXTENSIONS_WHITELIST = (
     'cogs.command_test',
     'cogs.administration',

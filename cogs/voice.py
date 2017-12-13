@@ -176,6 +176,8 @@ class Voice:
             await self._attach_player(ctx.guild, player)
         except UnknownPlayerError:
             await ctx.send(f'The player `{player}` doesn\'t exist!')
+        except NoVoiceStateError:
+            await ctx.send('I\'m not in a voice channel currently')
 
 
 def setup(bot):
