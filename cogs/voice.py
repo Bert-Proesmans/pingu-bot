@@ -104,16 +104,17 @@ class Voice:
         return state
 
     async def _attach_player(self, guild: discord.Guild, player_str: str):
-        if guild is None: raise commands.MissingRequiredArgument('guild')
-        if player_str is None: raise commands.MissingRequiredArgument('player')
+        if not guild: raise commands.MissingRequiredArgument('guild')
+        if not player_str: raise commands.MissingRequiredArgument('player')
 
         if player_str not in self._players:
             raise UnknownPlayerError()
 
         player_builder = self._players[player_str]
-        player = player_builder()
+        player = player_builder(guild=guild)
+        # The following also tests against None
         if not isinstance(player, PlayerBase):
-            raise Exception('Wrong implementation, dude!')
+            raise Exception()
 
         state = self._get_voice_state(guild)
         state.set_player(player)
@@ -178,6 +179,8 @@ class Voice:
             await ctx.send(f'The player `{player}` doesn\'t exist!')
         except NoVoiceStateError:
             await ctx.send('I\'m not in a voice channel currently')
+        except:
+            await ctx.send('Encountered an issue while building a `{player}` player..')
 
 
 def setup(bot):
