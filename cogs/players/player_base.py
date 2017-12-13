@@ -1,4 +1,6 @@
 
+# TODO Implement UnknownPlayerError
+
 class PlayerBase:
     def skip(self, amount: int):
         """Skip `amount` of songs."""

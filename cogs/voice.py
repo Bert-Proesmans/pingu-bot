@@ -7,12 +7,11 @@ from discord.ext import commands
 from unidecode import unidecode
 
 from .players import PlayerBase
-from .players.spotify import SpotControl as Spotify
 
 log = logging.getLogger(__name__)
 
 PLAYERS_WHITELIST = {
-    'spotify': 'cogs.players.spotify',
+    'spotify': 'cogs.players.spotify.control',
 }
 
 
@@ -26,7 +25,7 @@ class VoiceState:
 
     @property
     def current(self):
-        """Currently playing."""
+        """Currently playing. This method should return None is no music is being played."""
         return None
 
     @property
@@ -51,7 +50,11 @@ class Voice:
         self.voice_states = {}
         self._players = {}
 
+        self._setup_players()
+
     def _setup_players(self):
+        # TODO Use the bot interface for adding extensions
+        # Find out a way to retrieve the built control object.
         for player in set(PLAYERS_WHITELIST.keys()):
             lib_path = PLAYERS_WHITELIST[player]
             lib = importlib.import_module(lib_path)
@@ -102,6 +105,18 @@ class Voice:
     async def _attach_player(self, guild: discord.Guild, player_str: str):
         if guild is None: raise commands.MissingRequiredArgument('guild')
         if player_str is None: raise commands.MissingRequiredArgument('player')
+
+        if player_str not in self._players:
+            # TODO Change to unknown player error
+            raise Exception('Player unknown')
+
+        player_builder = self._players[player_str]
+        player = player_builder()
+        if not isinstance(player, PlayerBase):
+            raise Exception('Wrong implementation, dude!')
+
+        state = self._get_voice_state(guild)
+        state.set_player(player)
 
     @commands.command()
     @commands.guild_only()
