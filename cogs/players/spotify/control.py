@@ -14,24 +14,26 @@ log = logging.getLogger(__name__)
 
 
 class SpotControl(ControlBase):
-    def __init__(self):
+    def __init__(self, cfg=None):
         self._spawns = {}
+        if cfg:
+            self.config = cfg
 
     def spawn_source(self, *args, **kwargs):
         guild = kwargs.pop('guild', None)
         if not guild: raise ValueError('guild arg is missing')
-        (path, pipe) = self._setup_named_pipe()
+        pipe_info = self._setup_pipe()
         # TODO Remove hardcoded credentials!
-        spawn = SpotSpawn(path, pipe, ('todo', 'todo'))
+        cred = self.config.tmp_credentials
+        spawn = SpotSpawn(pipe_info, (cred.username, cred.password))
         self._spawns[guild.id] = spawn
         return spawn
 
-    def _setup_named_pipe(self):
-        pipe_name = 'pipe-spot-' + str(time.time())
-        pipe_path = os.path.join(tempfile.tempdir(), pipe_name)
-        os.mkfifo(pipe_path)
-        pipe_file = open(pipe_path, 'rb')
-        return pipe_path, pipe_file
+    def _setup_pipe(self):
+        fd_read, fd_write = os.pipe()
+        pipe_read = open(fd_read, 'rb')
+        pipe_write = open(fd_write, 'wb')
+        return pipe_read, pipe_write
 
     @commands.group(name='spotify')
     @commands.guild_only()
@@ -47,7 +49,8 @@ class SpotControl(ControlBase):
 
 
 def setup(bot):
-    spot_instance = SpotControl()
+    cfg = bot.config.SPOT_PLAYER
+    spot_instance = SpotControl(cfg)
     bot.add_cog(spot_instance)
 
 

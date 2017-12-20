@@ -16,3 +16,10 @@ EXTENSIONS_WHITELIST = (
     'cogs.administration',
     'cogs.voice',
 )
+
+SPOT_PLAYER = {
+    'tmp_credentials': {
+        'username': 'todo',
+        'password': 'todo'
+    }
+}

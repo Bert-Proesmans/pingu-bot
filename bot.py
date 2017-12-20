@@ -21,10 +21,11 @@ def _prefix_callable(bot, msg):
     if msg.guild is None:
         allowed_prefix.append('!')
         allowed_prefix.append('?')
+        allowed_prefix.append('')
     else:
         allowed_prefix.extend(bot.get_prefixes_for_guild(msg.guild.id))
     # DBG
-    log.debug(allowed_prefix)
+    # log.debug(allowed_prefix)
     return allowed_prefix
 
 

@@ -33,3 +33,7 @@ class PlayerBase(ABC, discord.AudioSource):
     def stop(self):
         """Cancel playing music and free allocated resources."""
         raise NotImplementedError
+
+    def queue(self, arg: str):
+        """Add a certain player item to the queue"""
+        raise NotImplementedError
