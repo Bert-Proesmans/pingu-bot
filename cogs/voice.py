@@ -70,6 +70,8 @@ class VoiceState:
             self._player.stop()
 
         self._player = player
+        self._voice_client.play(self._player)
+        self._player.play()
 
 
 class Voice:

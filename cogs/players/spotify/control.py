@@ -22,18 +22,10 @@ class SpotControl(ControlBase):
     def spawn_source(self, *args, **kwargs):
         guild = kwargs.pop('guild', None)
         if not guild: raise ValueError('guild arg is missing')
-        pipe_info = self._setup_pipe()
-        # TODO Remove hardcoded credentials!
-        cred = self.config.tmp_credentials
-        spawn = SpotSpawn(pipe_info, (cred.username, cred.password))
+        cred = self.config['tmp_credentials']
+        spawn = SpotSpawn((cred['username'], cred['password']))
         self._spawns[guild.id] = spawn
         return spawn
-
-    def _setup_pipe(self):
-        fd_read, fd_write = os.pipe()
-        pipe_read = open(fd_read, 'rb')
-        pipe_write = open(fd_write, 'wb')
-        return pipe_read, pipe_write
 
     @commands.group(name='spotify')
     @commands.guild_only()

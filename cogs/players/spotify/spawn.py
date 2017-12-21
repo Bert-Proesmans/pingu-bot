@@ -20,26 +20,39 @@ OUTPUT_RATE = 48000
 QUALITY = 5
 
 FRAME_20MS_44100 = int(((INPUT_RATE * FRAME_LENGTH) / 1000) * CHANNELS * SAMPLE_SIZE)
+FRAME_20MS_48000 = int(((OUTPUT_RATE * FRAME_LENGTH) / 1000) * CHANNELS * SAMPLE_SIZE)
 DT = np.dtype(np.int16).newbyteorder('<')
+ZEROS = np.zeros(FRAME_20MS_48000, dtype=DT).tobytes()
 
 
 class SpotSpawn(PlayerBase):
-    def __init__(self, pipe_file, credentials):
-        self.pipe = pipe_file
-        self.session = librespot.Session.connect(credentials[0], credentials[1], pipe_file).wait()
+    def __init__(self, credentials):
+        pipe_read, pipe_write = self._setup_pipe()
+        self.pipe = pipe_read
+        self.session = librespot.Session.connect(credentials[0], credentials[1], pipe_write).wait()
         self.player = self.session.player()
         self.playing = None
         self.is_playing = False
 
+    def _setup_pipe(self):
+        fd_read, fd_write = os.pipe()
+        pipe_read = open(fd_read, 'rb')
+        pipe_write = open(fd_write, 'wb')
+        return pipe_read, pipe_write
+
     def read(self):
-        if self.is_playing and self.playing.poll():
+        if not self.is_playing:
+            # Play something without playing something.. magic!
+            return ZEROS
+
+        if self.is_playing:
             buf = self.pipe.read(FRAME_20MS_44100)
             if len(buf) == 0:
                 return b''
 
             a = np.frombuffer(buf, dtype=DT)
             i = a.reshape((2, -1), order='F')
-            resampled = nnresample.resample(i, OUTPUT_RATE, INPUT_RATE, axis=1, fc='nn', As=80, N=32001)
+            resampled = nnresample.resample(i, OUTPUT_RATE, INPUT_RATE, axis=1, fc='nn', As=60, N=32001)
             o = resampled.reshape((-1,), order='F')
             return o.astype(DT).tobytes()
 
@@ -50,7 +63,8 @@ class SpotSpawn(PlayerBase):
 
     def cleanup(self):
         try:
-            self.pipe.close()
+            # self.pipe.close()
+            pass
         except:
             pass
 
@@ -67,10 +81,23 @@ class SpotSpawn(PlayerBase):
             self.playing = self.player.load(track)
 
     def play(self):
-        self.player.play()
+        def build_reset(obj):
+            def reset():
+                obj.is_playing = False
+            return reset
+
+        # DBG
+        # POMPEN!
+        trackId = librespot.SpotifyId("3B23etXBXxq1aCmFB8dby9")
+        print('Playing music')
+        self.playing = self.player.load(trackId)
+        self.playing.add_callback(build_reset(self))
+        self.is_playing = True
 
     def pause(self):
-        self.player.pause()
+        # self.player.pause()
+        pass
 
     def stop(self):
+        self.is_playing = False
         pass
