@@ -3,6 +3,7 @@ import tempfile
 import os
 import time
 
+import discord
 from discord.ext import commands
 
 from bot import MissingSubCommandError
@@ -27,11 +28,27 @@ class SpotControl(ControlBase):
         self._spawns[guild.id] = spawn
         return spawn
 
+    def get_spawn(self, guild: discord.Guild):
+        if not guild:
+            raise ValueError('guild arg missing')
+
+        return self._spawns[guild.id]
+
     @commands.group(name='spotify')
     @commands.guild_only()
     async def _spotify(self, ctx):
         if not ctx.subcommand_passed:
             raise MissingSubCommandError()
+
+    @_spotify.command(name='queue')
+    @commands.guild_only()
+    async def _queue(self, ctx, *, full: str):
+        try:
+            spawn = self.get_spawn(ctx.guild)
+            spawn.queue(full)
+            await ctx.send('Queued successfully')
+        except KeyError:
+            await ctx.send('Not attached to this voice client. Attach first!')
 
     @_spotify.command(name='setup')
     @commands.guild_only()

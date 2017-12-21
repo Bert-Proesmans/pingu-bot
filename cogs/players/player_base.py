@@ -14,6 +14,12 @@ class ControlBase(ABC):
 
 
 class PlayerBase(ABC, discord.AudioSource):
+    def read(self):
+        """Returns 20ms worth of audio data; either PCM or Opus.
+        The requested specs are stereo/interleaved/i16/48KHz
+        """
+        raise NotImplementedError
+
     def skip(self, amount: int):
         """Skip `amount` of songs."""
         raise NotImplementedError
@@ -22,7 +28,7 @@ class PlayerBase(ABC, discord.AudioSource):
         """Go back `amount` of songs."""
         raise NotImplementedError
 
-    def play(self):
+    def resume(self):
         """Send music to channel."""
         raise NotImplementedError
 

@@ -1,6 +1,7 @@
 import logging
 import os
 import tempfile
+import collections
 
 import numpy as np
 from discord.ext import commands
@@ -25,45 +26,61 @@ DT = np.dtype(np.int16).newbyteorder('<')
 ZEROS = np.zeros(FRAME_20MS_48000, dtype=DT).tobytes()
 
 
+def _resample(src):
+    if isinstance(src, np.ndarray):
+        a = src
+    elif isinstance(src, bytes):
+        a = np.frombuffer(src, dtype=DT)
+    else:
+        raise NotImplementedError("Unknown source")
+
+    i = a.reshape((2, -1), order='F')
+    resampled = nnresample.resample(i, OUTPUT_RATE, INPUT_RATE, axis=1, fc='nn', As=80, N=32001)
+    o = resampled.reshape((-1,), order='F')
+    return o.astype(DT).tobytes()
+
+
+#  Do a warmup run as to not delay the first resample iterations
+for i in range(5):
+    _resample(ZEROS)
+log.info("Warmup run completed")
+
+
 class SpotSpawn(PlayerBase):
     def __init__(self, credentials):
         pipe_read, pipe_write = self._setup_pipe()
         self.pipe = pipe_read
         self.session = librespot.Session.connect(credentials[0], credentials[1], pipe_write).wait()
+
         self.player = self.session.player()
         self.playing = None
-        self.is_playing = False
+        self.playlist = collections.deque()
 
-    def _setup_pipe(self):
+    @staticmethod
+    def _setup_pipe():
         fd_read, fd_write = os.pipe()
         pipe_read = open(fd_read, 'rb')
         pipe_write = open(fd_write, 'wb')
         return pipe_read, pipe_write
 
     def read(self):
-        if not self.is_playing:
+        if not self.playing:
             # Play something without playing something.. magic!
             return ZEROS
 
-        if self.is_playing:
-            buf = self.pipe.read(FRAME_20MS_44100)
-            if len(buf) == 0:
-                return b''
-
-            a = np.frombuffer(buf, dtype=DT)
-            i = a.reshape((2, -1), order='F')
-            resampled = nnresample.resample(i, OUTPUT_RATE, INPUT_RATE, axis=1, fc='nn', As=60, N=32001)
-            o = resampled.reshape((-1,), order='F')
-            return o.astype(DT).tobytes()
-
-        return b''
+        # Otherwise play from sink
+        buf = self.pipe.read(FRAME_20MS_44100)
+        if len(buf) == 0:
+            return b''
+        return _resample(buf)
 
     def is_opus(self):
         return False
 
     def cleanup(self):
         try:
-            # self.pipe.close()
+            # TODO Shutdown reactor within session
+            self.pipe.close()
             pass
         except:
             pass
@@ -78,26 +95,39 @@ class SpotSpawn(PlayerBase):
         track_prefix = 'track:'
         if arg.startswith(track_prefix):
             track = librespot.SpotifyId(arg[len(track_prefix):])
-            self.playing = self.player.load(track)
+            self.playlist.append(track)
+        else:  # Do a flat search
+            pass
 
-    def play(self):
-        def build_reset(obj):
-            def reset():
-                obj.is_playing = False
-            return reset
+    def _next_song(self):
+        def build_next(obj):
+            return obj._next_song
+
+        if self.playlist:
+            next_track = self.playlist.popleft()
+            # 1. The SpotifyID object which will be loaded
+            # 2. If this item must be autostarted
+            # 3. The position to scrub after load (milliseconds)
+            self.playing = self.player.load(next_track, True, 0)
+            self.playing.add_callback(build_next(self))
+
+    def resume(self):
+        if not self.playing:
+            self._next_song()
+
+        self.player.play()
 
         # DBG
         # POMPEN!
-        trackId = librespot.SpotifyId("3B23etXBXxq1aCmFB8dby9")
-        print('Playing music')
-        self.playing = self.player.load(trackId)
-        self.playing.add_callback(build_reset(self))
-        self.is_playing = True
+        # trackId = librespot.SpotifyId("3B23etXBXxq1aCmFB8dby9")
+        # print('Playing music')
+        # self.playing = self.player.load(trackId)
+        # self.playing.add_callback(build_next(self))
+        # self.is_playing = True
 
     def pause(self):
-        # self.player.pause()
-        pass
+        self.player.pause()
 
     def stop(self):
-        self.is_playing = False
-        pass
+        self.pause()
+        self.playing = None
